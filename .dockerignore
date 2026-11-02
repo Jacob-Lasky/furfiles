@@ -1,0 +1,9 @@
+**/target
+**/node_modules
+**/.pnpm-store
+**/dist
+**/*.db
+data/
+.git
+*.md
+docs

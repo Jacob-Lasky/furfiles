@@ -1,0 +1,29 @@
+# FurFiles: `docker compose up -d`, then open http://localhost:8080
+#
+# Uses the published image. To build from this checkout instead:
+#   docker compose up -d --build
+services:
+  furfiles:
+    image: ghcr.io/jacob-lasky/furfiles:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${FURFILES_PORT:-8080}:8080"
+    volumes:
+      # Everything worth keeping: furfiles.db, attachments/ (documents and
+      # photos) and furfiles-secret.key. Back up this directory.
+      - ./data:/data
+    # Diagnostics reports live in RAM and are wiped on restart.
+    tmpfs:
+      - /diag
+    # Set these in a `.env` file next to this one (or the shell). Empty means
+    # the default; see the Configuration table in README.md.
+    environment:
+      FURFILES_DIAG_DIR: /diag
+      # Name shown for the household owner on first start (default "Owner").
+      FURFILES_OWNER_NAME: ${FURFILES_OWNER_NAME:-}
+      # "1" fills an EMPTY database with the fictional demo household.
+      FURFILES_SEED_DEMO: ${FURFILES_SEED_DEMO:-}
+      # Passphrase that encrypts the stored AI API key. Without it a key file
+      # is generated in ./data (keep it with your backups either way).
+      FURFILES_SECRET: ${FURFILES_SECRET:-}

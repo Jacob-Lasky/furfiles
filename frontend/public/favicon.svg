@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="FurFiles">
+  <!-- FurFiles app icon: coral field + white paw. The paw path is the SAME
+       PAW_PATH exported from frontend/src/format.js (24x24 viewBox), so the icon
+       can't drift from the in-app mark. If PAW_PATH changes, regenerate the
+       raster assets with frontend/scripts/gen-icons.sh. -->
+  <rect width="512" height="512" rx="112" fill="#F2624C"/>
+  <path transform="translate(256 256) scale(16) translate(-12 -11.65)" fill="#FFFFFF" d="M6.5 11.2c1.2 0 2.1-1.5 2.1-3.3S7.7 4.6 6.5 4.6 4.4 6.1 4.4 7.9s.9 3.3 2.1 3.3zM17.5 11.2c1.2 0 2.1-1.5 2.1-3.3s-.9-3.3-2.1-3.3-2.1 1.5-2.1 3.3.9 3.3 2.1 3.3zM9.9 8c1.05 0 1.9-1.36 1.9-3S10.95 2 9.9 2 8 3.36 8 5s.85 3 1.9 3zM14.1 8c1.05 0 1.9-1.36 1.9-3s-.85-3-1.9-3-1.9 1.36-1.9 3 .85 3 1.9 3zM12 12c-2.4 0-4.3 2.1-5.2 3.9-.5 1-1.5 1.9-1.5 3.1 0 1.6 1.3 2.6 2.9 2.3 1.3-.24 2.5-.8 3.8-.8s2.5.56 3.8.8c1.6.3 2.9-.7 2.9-2.3 0-1.2-1-2.1-1.5-3.1C16.3 14.1 14.4 12 12 12z"/>
+</svg>

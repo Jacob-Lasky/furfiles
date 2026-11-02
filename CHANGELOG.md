@@ -1,0 +1,50 @@
+# Changelog
+
+All notable changes to FurFiles are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-02
+
+The first public release.
+
+### Added
+
+- Pets of any species, with the profile facts a vet intake form asks for:
+  breed, sex (a fixed set, worded for the species), colour, birthday, gotcha
+  day, microchip and weight, plus a life stage from the AAHA/AAFP guidelines.
+- Medical records with Markdown notes, cost, itemised line items, custom
+  fields, the treating clinic, and attachments that open inline (PDFs and
+  images, including iPhone HEIC photos).
+- Ongoing care: food, preventatives, medications and supplements, with what
+  each preventative protects against.
+- Allergies shown as a medical alert on the pet's profile.
+- Reminders, a "next up" on every pet, and a month and agenda calendar.
+- Shared contacts (vets, emergency, specialists, groomers, daycare and
+  boarding) with hours and facility requirements, and a care team per pet.
+- Costs by category and pet, insurance and wellness plans, and per-term
+  insurance value: premium paid in, payouts, and the break-even bill.
+- Optional AI document reading with your own Anthropic API key (stored
+  encrypted): scan one document into a pre-filled record, read a facility's
+  website into a contact, or bulk-import a stack of documents that are split
+  into visits per pet, de-duplicated, and saved only after review.
+- Archiving a pet as passed or rehomed, editable and reversible.
+- Pet portrait photos with crop and rotate, and a family portrait on Home.
+- Phone and desktop layouts, light and dark themes, installable web app.
+- A REST API under `/api` for everything the UI does.
+- A fictional demo household, enabled with `FURFILES_SEED_DEMO=1` on an empty
+  database, dated relative to the day it is seeded.
+- `FURFILES_OWNER_NAME` to name the household owner on a new install.
+- Docker Compose file, CI for the backend and frontend test suites, and a
+  container image published to `ghcr.io/jacob-lasky/furfiles`.
+
+### Fixed
+
+- Page headers on a phone wrap their buttons below the title instead of
+  squeezing the title into a narrow column (Calendar).
+- A new install no longer names its household owner after the author.
+
+[Unreleased]: https://github.com/Jacob-Lasky/furfiles/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Jacob-Lasky/furfiles/releases/tag/v0.1.0

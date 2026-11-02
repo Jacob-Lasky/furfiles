@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    // Vite/esbuild transpiles per-file and never type-checks; vue-tsc does the
+    // checking. So these options target correctness, not emit.
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true,
+
+    // Full strict, with one deliberate exception: caught errors stay `any`
+    // rather than `unknown`. The catch blocks here only read `.message` for a
+    // display string; typing every `catch (e)` as unknown would mean rewriting
+    // ~20 handlers for no correctness win. Everything that guards real data
+    // (strictNullChecks, noImplicitAny, …) stays on.
+    "strict": true,
+    "useUnknownInCatchVariables": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Vite-friendly module semantics: each file must be independently
+    // transpilable, and type-only imports must say so (esbuild strips them
+    // blindly — a value-style import of a pure type would survive to runtime and
+    // fail as a missing ESM export).
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "useDefineForClassFields": true
+  },
+  // Type-check the app source. Test files are `.ts` and run under Vitest (which
+  // transpiles via esbuild and never type-checks); subjecting them to vue-tsc
+  // would demand heavy DOM-cast / fixture-typing churn for little payoff. Bring
+  // test/** in scope as a follow-up if that trade changes (#51 open question).
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
+}
