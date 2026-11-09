@@ -216,8 +216,9 @@ header) are refused.
 If FurFiles sits behind a reverse proxy (for HTTPS on your own domain), give
 the MCP endpoint its own hostname rather than reusing the app's:
 
-- **Route only the exact path `/mcp`.** The MCP endpoint is a single URL, so
-  the rest of the app (the UI and `/api`) need not be reachable on that name.
+- **Route only the exact path `/mcp`.** Clients only ever use that one URL
+  (the server also answers under `/mcp/...`, but no client needs it), so the
+  rest of the app (the UI and `/api`) need not be reachable on that name.
 - **Do not put single sign-on in front of it** (Authelia, Authentik,
   oauth2-proxy). An MCP client cannot follow a login redirect; the bearer
   token is the authentication. Keep any SSO on the app's own hostname.
