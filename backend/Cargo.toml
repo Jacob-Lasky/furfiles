@@ -28,10 +28,10 @@ anyhow = "1"
 # LLM document ingestion (#4). rustls (not native-tls) so the slim runtime image
 # needs no OpenSSL; the API key never leaves the backend in plaintext.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 rand = "0.8"
 base64 = "0.22"
-sha2 = "0.10"
+sha2 = "0.11"
 uuid = { version = "1", features = ["v4"] }
 # MCP server (#22): the official Rust SDK, Streamable HTTP served from the same
 # Axum app. `server` + `macros` for the #[tool] router.

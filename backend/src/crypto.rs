@@ -78,7 +78,7 @@ pub fn encrypt(key: &[u8; 32], plaintext: &str) -> String {
     let mut nonce = [0u8; NONCE_LEN];
     rand::thread_rng().fill_bytes(&mut nonce);
     let ct = cipher
-        .encrypt(XNonce::from_slice(&nonce), plaintext.as_bytes())
+        .encrypt(&XNonce::from(nonce), plaintext.as_bytes())
         .expect("XChaCha20-Poly1305 encryption cannot fail for valid input");
     let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
     out.extend_from_slice(&nonce);
@@ -94,9 +94,10 @@ pub fn decrypt(key: &[u8; 32], blob: &str) -> anyhow::Result<String> {
         anyhow::bail!("ciphertext too short");
     }
     let (nonce, ct) = raw.split_at(NONCE_LEN);
+    let nonce = XNonce::try_from(nonce).map_err(|_| anyhow::anyhow!("malformed nonce"))?;
     let cipher = XChaCha20Poly1305::new(key.into());
     let pt = cipher
-        .decrypt(XNonce::from_slice(nonce), ct)
+        .decrypt(&nonce, ct)
         .map_err(|_| anyhow::anyhow!("decryption failed (wrong key or corrupt data)"))?;
     Ok(String::from_utf8(pt)?)
 }
