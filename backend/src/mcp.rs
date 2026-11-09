@@ -153,7 +153,7 @@ pub fn router(state: AppState, token: Option<McpToken>) -> Router {
         return Router::new()
             .route("/mcp", axum::routing::any(mcp_disabled))
             .route("/mcp/", axum::routing::any(mcp_disabled))
-            .route("/mcp/*rest", axum::routing::any(mcp_disabled));
+            .route("/mcp/{*rest}", axum::routing::any(mcp_disabled));
     };
     // Host checking is OFF: the bearer token is the gate, and the server is
     // reached under several LAN names. Origin checking is ON with an empty

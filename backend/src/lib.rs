@@ -141,17 +141,17 @@ pub fn api_router(state: AppState) -> Router {
         .route("/users", get(handlers::list_users))
         .route("/pets", get(handlers::list_pets).post(handlers::create_pet))
         .route(
-            "/pets/:id",
+            "/pets/{id}",
             get(handlers::get_pet)
                 .patch(handlers::update_pet)
                 .delete(handlers::delete_pet),
         )
         // Archive (#3): `passed` or `rehomed`; re-post to edit, unarchive to undo.
-        .route("/pets/:id/archive", post(handlers::archive_pet))
-        .route("/pets/:id/unarchive", post(handlers::unarchive_pet))
+        .route("/pets/{id}/archive", post(handlers::archive_pet))
+        .route("/pets/{id}/unarchive", post(handlers::unarchive_pet))
         // Portrait photo (#21): one per pet, backed by the reserved photo_path.
         .route(
-            "/pets/:id/photo",
+            "/pets/{id}/photo",
             put(handlers::set_pet_photo)
                 .get(handlers::get_pet_photo)
                 .delete(handlers::delete_pet_photo),
@@ -165,19 +165,19 @@ pub fn api_router(state: AppState) -> Router {
                 .delete(household::delete_portrait),
         )
         .route(
-            "/pets/:id/records",
+            "/pets/{id}/records",
             get(handlers::list_records).post(handlers::create_record),
         )
         .route(
-            "/pets/:id/records/:rid",
+            "/pets/{id}/records/{rid}",
             axum::routing::patch(handlers::update_record).delete(handlers::delete_record),
         )
         .route(
-            "/pets/:id/weights",
+            "/pets/{id}/weights",
             get(handlers::list_weights).post(handlers::create_weight),
         )
         .route(
-            "/pets/:id/weights/:wid",
+            "/pets/{id}/weights/{wid}",
             axum::routing::patch(handlers::update_weight).delete(handlers::delete_weight),
         )
         // Shared contacts (#20): the care-team entity + per-pet links.
@@ -186,71 +186,71 @@ pub fn api_router(state: AppState) -> Router {
             get(handlers::list_contacts).post(handlers::create_contact),
         )
         // Facility web parser (#42): fetch a URL → propose contact + requirements.
-        // Registered before `/contacts/:cid` so the static segment wins the match.
+        // Registered before `/contacts/{cid}` so the static segment wins the match.
         .route("/contacts/parse-url", post(handlers::parse_contact_url))
         .route(
-            "/contacts/:cid",
+            "/contacts/{cid}",
             get(handlers::get_contact)
                 .patch(handlers::update_contact)
                 .delete(handlers::delete_contact),
         )
         .route(
-            "/pets/:id/contacts",
+            "/pets/{id}/contacts",
             get(handlers::list_pet_contacts).post(handlers::link_pet_contact),
         )
         .route(
-            "/pets/:id/contacts/:cid",
+            "/pets/{id}/contacts/{cid}",
             axum::routing::delete(handlers::unlink_pet_contact),
         )
         // Insurance & wellness plans (#8/#29): pet-level policies + embedded doc.
         // `/insurance/extract` and `/insurance/value` are static, registered before
-        // `/insurance/:pid`.
+        // `/insurance/{pid}`.
         .route(
-            "/pets/:id/insurance",
+            "/pets/{id}/insurance",
             get(handlers::list_pet_insurance).post(handlers::create_insurance),
         )
         .route("/insurance/extract", post(handlers::extract_insurance_doc))
         // Insurance value (#74): paid in vs paid back per term, break-even.
         .route("/insurance/value", get(insurance_value::household_value))
         .route(
-            "/pets/:id/insurance/value",
+            "/pets/{id}/insurance/value",
             get(insurance_value::pet_insurance_value),
         )
         .route(
-            "/insurance/:pid/value",
+            "/insurance/{pid}/value",
             get(insurance_value::policy_insurance_value),
         )
         .route(
-            "/insurance/:pid",
+            "/insurance/{pid}",
             get(handlers::get_insurance)
                 .patch(handlers::update_insurance)
                 .delete(handlers::delete_insurance),
         )
         .route(
-            "/insurance/:pid/document",
+            "/insurance/{pid}/document",
             put(handlers::set_insurance_document)
                 .get(handlers::get_insurance_document)
                 .delete(handlers::delete_insurance_document),
         )
         // Ongoing care (#63): food, preventatives, medications, supplements.
         .route(
-            "/pets/:id/regimens",
+            "/pets/{id}/regimens",
             get(handlers::list_pet_regimens).post(handlers::create_regimen),
         )
         .route(
-            "/regimens/:rid",
+            "/regimens/{rid}",
             get(handlers::get_regimen)
                 .patch(handlers::update_regimen)
                 .delete(handlers::delete_regimen),
         )
         // Reminders / calendar events (#26)
         .route(
-            "/pets/:id/reminders",
+            "/pets/{id}/reminders",
             get(handlers::list_reminders).post(handlers::create_reminder),
         )
         .route("/reminders", get(handlers::list_all_reminders))
         .route(
-            "/reminders/:rid",
+            "/reminders/{rid}",
             axum::routing::patch(handlers::update_reminder).delete(handlers::delete_reminder),
         )
         .route("/costs/summary", get(handlers::costs_summary))
@@ -284,11 +284,11 @@ pub fn api_router(state: AppState) -> Router {
         .route("/import/commit", post(import::commit))
         // Attachments (#4)
         .route(
-            "/records/:rid/attachments",
+            "/records/{rid}/attachments",
             get(handlers::list_attachments).post(handlers::create_attachment),
         )
         .route(
-            "/attachments/:aid",
+            "/attachments/{aid}",
             get(handlers::get_attachment).delete(handlers::delete_attachment),
         )
         // Diagnostics capture (#41): client error reports + the triggering file,
@@ -299,8 +299,8 @@ pub fn api_router(state: AppState) -> Router {
                 .post(handlers::create_diag)
                 .delete(handlers::clear_diag),
         )
-        .route("/diag/:id", get(handlers::get_diag))
-        .route("/diag/:id/file", get(handlers::get_diag_file))
+        .route("/diag/{id}", get(handlers::get_diag))
+        .route("/diag/{id}/file", get(handlers::get_diag_file))
         // Unmatched /api/* → JSON 404, not the SPA shell (which the outer fallback
         // would otherwise serve with a 200).
         .fallback(handlers::api_not_found)
