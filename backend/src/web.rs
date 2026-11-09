@@ -410,6 +410,13 @@ pub async fn read_capped(mut resp: reqwest::Response, cap: usize) -> Result<Vec<
 /// checked like the first URL: a public page answering `302 Location:
 /// http://router.lan/` must not reach the LAN. Browser-ish Accept header, since
 /// some site builders serve a stub to unknown Accept values.
+///
+/// DO NOT give this function any logic of its own, and above all DO NOT read
+/// the response body here: it must stay a pure delegation to
+/// [`get_html_guarded`] with the SSRF guard. The endless-body test
+/// (`facility_fetch_stops_reading_at_the_page_cap`) can only drive
+/// `get_html_guarded`, because a local test server cannot pass the guard, so
+/// anything added here runs in production untested.
 async fn get_html(client: &reqwest::Client, url: &Url) -> Result<(Url, String), String> {
     get_html_guarded(client, url, resolved_ok).await
 }
