@@ -3653,7 +3653,7 @@ async fn sex_migration_matches_the_rust_mapping() {
     let (before, m16): (Vec<_>, Vec<_>) = migrator.iter().partition(|m| m.version < 16);
     assert_eq!(m16[0].version, 16, "0016 is the sex migration");
     for m in before {
-        sqlx::raw_sql(&m.sql).execute(&pool).await.unwrap();
+        sqlx::raw_sql(m.sql.clone()).execute(&pool).await.unwrap();
     }
     // Words `sex_from_text` learned after 0016 shipped. The migration is frozen
     // (sqlx checksums it), so a new Rust word is listed here, never added there.
@@ -3694,7 +3694,7 @@ async fn sex_migration_matches_the_rust_mapping() {
     }
     sqlx::query("INSERT INTO pets (id, name, species, created_at, updated_at) VALUES ('null', 'Null', 'Cat', '', '')")
         .execute(&pool).await.unwrap();
-    sqlx::raw_sql(&m16[0].sql).execute(&pool).await.unwrap();
+    sqlx::raw_sql(m16[0].sql.clone()).execute(&pool).await.unwrap();
 
     for (i, t) in samples.iter().enumerate() {
         let (sex, original): (Option<String>, String) = sqlx::query_as(

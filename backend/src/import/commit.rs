@@ -296,15 +296,18 @@ async fn validate_commit(pool: &SqlitePool, plan: &ImportPlan, sha: &str) -> App
             return Err(AppError::BadRequest("name cannot be empty".into()));
         }
         // Only fill/overwrite the value the person saw when they ticked it.
-        let col = match u.field.as_str() {
-            "name" => "name",
-            "breed" => "breed",
-            "sex" => "sex",
-            "color" => "color",
-            "microchip" => "microchip",
-            _ => "birth_date",
+        // One literal statement per allowed field (PET_UPDATE_FIELDS above), so
+        // no SQL is ever assembled from input; sqlx 0.9 also refuses a built
+        // string here without an explicit audit.
+        let sql = match u.field.as_str() {
+            "name" => "SELECT name FROM pets WHERE id = ?",
+            "breed" => "SELECT breed FROM pets WHERE id = ?",
+            "sex" => "SELECT sex FROM pets WHERE id = ?",
+            "color" => "SELECT color FROM pets WHERE id = ?",
+            "microchip" => "SELECT microchip FROM pets WHERE id = ?",
+            _ => "SELECT birth_date FROM pets WHERE id = ?",
         };
-        let now: Option<String> = sqlx::query_scalar(&format!("SELECT {col} FROM pets WHERE id = ?"))
+        let now: Option<String> = sqlx::query_scalar(sql)
             .bind(&u.pet_id)
             .fetch_one(pool)
             .await?;
