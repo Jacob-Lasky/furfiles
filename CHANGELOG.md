@@ -14,6 +14,12 @@ All notable changes to FurFiles are recorded here. The format follows
   and the generated secret key file keep working unchanged. HTTPS now trusts
   the operating system's certificate store, so a custom image must keep
   `ca-certificates` installed.
+- Frontend toolchain on current versions: pnpm 12, vitest 5, jsdom 31,
+  vue-tsc 3 and TypeScript 6, plus Vue 3.5.45, Vue Router 5.4 and Vite 8.3.6.
+  TypeScript stays on 6.x because vue-tsc does not run on the native
+  TypeScript 7 yet. pnpm 12 holds back releases younger than its default
+  minimum release age, so a version published in the last day waits for the
+  next update.
 
 ### Fixed
 
