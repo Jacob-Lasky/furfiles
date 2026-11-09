@@ -704,6 +704,29 @@ fn parse_response_reads_tool_use_and_errors_otherwise() {
 }
 
 #[test]
+fn parse_response_drops_reminders_the_scan_sheet_could_not_save() {
+    let resp = json!({
+        "content": [{
+            "type": "tool_use", "name": "record_fields",
+            "input": {
+                "title": "Exam",
+                "reminders": [
+                    {"due_on": " 2026-09-05 ", "title": " Fecal exam "},
+                    {"due_on": "2026-02-30", "title": "Impossible date"},
+                    {"due_on": "next spring", "title": "Not a date"},
+                    {"title": "No date"},
+                    {"due_on": "2026-10-01", "title": "  "}
+                ]
+            }
+        }]
+    });
+    let f = furfiles::ingestion::parse_response(&resp).unwrap();
+    assert_eq!(f.reminders.len(), 1);
+    assert_eq!(f.reminders[0].title, "Fecal exam");
+    assert_eq!(f.reminders[0].due_on.as_deref(), Some("2026-09-05"));
+}
+
+#[test]
 fn media_supported_matches_the_allowed_list() {
     assert!(furfiles::ingestion::media_supported("application/pdf"));
     assert!(furfiles::ingestion::media_supported("image/jpeg"));
@@ -3700,4 +3723,74 @@ async fn sex_migration_matches_the_rust_mapping() {
     )
     .fetch_one(&pool).await.unwrap();
     assert_eq!(stray, 0);
+}
+
+// ---------- validation reachable by any client (#22) ----------
+
+#[tokio::test]
+async fn record_category_must_be_a_known_one() {
+    let pool = memory_pool().await;
+    furfiles::seed::ensure_owner(&pool).await.unwrap();
+    furfiles::seed::seed_if_empty(&pool).await.unwrap();
+    let app = api_router(AppState::for_test(pool));
+    let (s, body) = send(
+        &app,
+        "POST",
+        "/pets/biscuit/records",
+        Some(json!({"occurred_on": "2026-01-02", "title": "Shots", "category": "Vaccination"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("unknown category 'Vaccination'"));
+    let (s, rec) = send(
+        &app,
+        "POST",
+        "/pets/biscuit/records",
+        Some(json!({"occurred_on": "2026-01-02", "title": "Shots", "category": "Prescriptions"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+    let uri = format!("/pets/biscuit/records/{}", rec["id"]);
+    let (s, _) = send(&app, "PATCH", &uri, Some(json!({"category": "Vet"}))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, up) = send(&app, "PATCH", &uri, Some(json!({"category": "Grooming"}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(up["category"], "Grooming");
+}
+
+#[tokio::test]
+async fn reminder_dates_are_real_and_titles_not_blank() {
+    let pool = memory_pool().await;
+    furfiles::seed::ensure_owner(&pool).await.unwrap();
+    furfiles::seed::seed_if_empty(&pool).await.unwrap();
+    let app = api_router(AppState::for_test(pool));
+    for due in ["2026-02-30", "soon", "  "] {
+        let (s, _) = send(
+            &app,
+            "POST",
+            "/pets/biscuit/reminders",
+            Some(json!({"due_on": due, "title": "Booster"})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{due:?}");
+    }
+    let (s, r) = send(
+        &app,
+        "POST",
+        "/pets/biscuit/reminders",
+        Some(json!({"due_on": " 2026-03-01 ", "title": "Booster"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+    assert_eq!(r["due_on"], "2026-03-01");
+    let uri = format!("/reminders/{}", r["id"]);
+    for bad in [json!({"due_on": "2026-04-31"}), json!({"due_on": ""}), json!({"title": "   "})] {
+        let (s, _) = send(&app, "PATCH", &uri, Some(bad.clone())).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    let (s, up) = send(&app, "PATCH", &uri, Some(json!({"title": " Rabies booster ", "done": true}))).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(up["title"], "Rabies booster");
+    assert_eq!(up["done"], true);
+    assert_eq!(up["due_on"], "2026-03-01");
 }

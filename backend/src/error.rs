@@ -53,23 +53,39 @@ impl From<sqlx::Error> for AppError {
     }
 }
 
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let (status, msg) = match self {
-            AppError::NotFound(m) => (StatusCode::NOT_FOUND, m),
-            AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
-            AppError::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, m),
-            AppError::Upstream(m) => (StatusCode::BAD_GATEWAY, m),
+impl AppError {
+    /// The HTTP status this error maps to.
+    pub fn status(&self) -> StatusCode {
+        match self {
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+            AppError::Upstream(_) => StatusCode::BAD_GATEWAY,
+            AppError::Internal(_) | AppError::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    /// The message a client may see, logging the server-side failures. A raw
+    /// database error stays in the log and the client gets "internal error".
+    /// The one source for both the REST body and an MCP tool error (#22).
+    pub fn public_message(&self) -> String {
+        match self {
             AppError::Internal(m) => {
                 tracing::error!("internal error: {m}");
-                (StatusCode::INTERNAL_SERVER_ERROR, m)
+                m.clone()
             }
             AppError::Db(e) => {
                 tracing::error!("db error: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
+                "internal error".into()
             }
-        };
-        (status, Json(json!({ "error": msg }))).into_response()
+            other => other.to_string(),
+        }
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (self.status(), Json(json!({ "error": self.public_message() }))).into_response()
     }
 }
 

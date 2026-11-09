@@ -22,6 +22,7 @@ pub mod household;
 pub mod import;
 pub mod ingestion;
 pub mod insurance_value;
+pub mod mcp;
 pub mod models;
 pub mod seed;
 pub mod settings;
@@ -59,6 +60,8 @@ pub struct AppState {
     /// triggered them. A tmpfs in production, wiped on every container restart;
     /// never the `/data` volume.
     pub diag_dir: PathBuf,
+    /// The MCP endpoint's bearer token (#22). `None` = `/mcp` is disabled.
+    pub mcp_token: Option<mcp::McpToken>,
 }
 
 impl AppState {
@@ -72,6 +75,7 @@ impl AppState {
             attachments_dir,
             // Off-volume default; `run()` points this at the tmpfs mount.
             diag_dir: std::env::temp_dir().join("furfiles-diag"),
+            mcp_token: None,
         }
     }
 
@@ -97,6 +101,7 @@ impl AppState {
             models_cache: ingestion::ModelCache::default(),
             attachments_dir: dir.join("attachments"),
             diag_dir: dir.join("diag"),
+            mcp_token: None,
         }
     }
 }
@@ -348,18 +353,25 @@ async fn log_errors(req: Request, next: Next) -> Response {
     res
 }
 
-/// Full application: API under `/api`, everything else served from the built
+/// Full application: API under `/api`, the MCP endpoint at `/mcp` (#22, a JSON
+/// 404 unless a token is configured), everything else served from the built
 /// frontend with an SPA fallback so deep links (`/pets/biscuit`, `/costs`) work
 /// on a hard refresh (#11).
 pub fn build_router(state: AppState, static_dir: PathBuf) -> Router {
     let index = static_dir.join("index.html");
     let spa = ServeDir::new(&static_dir).fallback(ServeFile::new(index));
-    Router::new()
+    let mcp = mcp::router(state.clone(), state.mcp_token.clone());
+    // CORS covers the web app only. `/mcp` refuses browsers outright (#22), so
+    // it must not answer a preflight with "allowed" either.
+    let web = Router::new()
         .nest("/api", api_router(state))
         .fallback_service(spa)
+        .layer(CorsLayer::permissive());
+    Router::new()
+        .merge(mcp)
+        .merge(web)
         .layer(middleware::from_fn(cache_control))
         .layer(middleware::from_fn(log_errors))
-        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
 }
 
@@ -447,6 +459,7 @@ pub async fn run() -> anyhow::Result<()> {
         .unwrap_or_else(|_| std::env::temp_dir().join("furfiles-diag"));
     std::fs::create_dir_all(&diag_dir).ok();
     state.diag_dir = diag_dir;
+    state.mcp_token = mcp::McpToken::from_env();
     // Fingerprint attachments stored before migration 0015 (#23), so bulk import
     // recognises documents that were uploaded before it existed.
     match handlers::backfill_attachment_hashes(&state).await {

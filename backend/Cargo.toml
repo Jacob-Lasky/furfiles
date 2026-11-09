@@ -33,6 +33,9 @@ rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
+# MCP server (#22): the official Rust SDK, Streamable HTTP served from the same
+# Axum app. `server` + `macros` for the #[tool] router.
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 
 [dev-dependencies]
 http-body-util = "0.1"

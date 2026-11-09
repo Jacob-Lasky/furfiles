@@ -519,6 +519,7 @@ pub async fn create_record(
     let occurred_on = iso_date("occurred_on", Some(nr.occurred_on))?
         .ok_or_else(|| AppError::BadRequest("occurred_on is required".into()))?;
     let ends_on = iso_date("ends_on", nr.ends_on)?;
+    validate_category(&nr.category)?;
     // A blank contact_id means "no clinic"; a non-blank one must resolve to a real
     // contact so the record never carries a dangling clinic link (#20).
     let contact_id = nr.contact_id.filter(|s| !s.is_empty());
@@ -556,10 +557,24 @@ pub async fn create_record(
     Ok((StatusCode::CREATED, Json(rec)))
 }
 
+/// A record's category must be one the UI can colour and filter by
+/// ([`RECORD_CATEGORIES`]). Unchecked, any client (an MCP assistant, #22, or a
+/// script) could file a "Vaccination" record that no category view ever shows.
+pub(crate) fn validate_category(category: &str) -> AppResult<()> {
+    if RECORD_CATEGORIES.contains(&category) {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(format!(
+            "unknown category '{category}' (expected one of: {})",
+            RECORD_CATEGORIES.join(", ")
+        )))
+    }
+}
+
 /// Load a record, 404-ing unless it exists AND belongs to `pet_id`. The pet
 /// check means a mismatched URL (`/pets/other/records/:rid`) can't touch a
 /// record it doesn't own.
-async fn load_record_of_pet(pool: &SqlitePool, pet_id: &str, rid: i64) -> AppResult<MedicalRecord> {
+pub(crate) async fn load_record_of_pet(pool: &SqlitePool, pet_id: &str, rid: i64) -> AppResult<MedicalRecord> {
     sqlx::query_as::<_, MedicalRecord>("SELECT * FROM medical_records WHERE id = ? AND pet_id = ?")
         .bind(rid)
         .bind(pet_id)
@@ -593,7 +608,13 @@ pub async fn update_record(
             .ok_or_else(|| AppError::BadRequest("occurred_on cannot be blank".into()))?,
         None => cur.occurred_on,
     };
-    let category = up.category.unwrap_or(cur.category);
+    let category = match up.category {
+        Some(c) => {
+            validate_category(&c)?;
+            c
+        }
+        None => cur.category,
+    };
     let ends_on = match up.ends_on {
         Some(v) => iso_date("ends_on", v)?,
         None => cur.ends_on,
@@ -798,14 +819,15 @@ pub async fn create_reminder(
     if nr.title.trim().is_empty() {
         return Err(AppError::BadRequest("reminder title is required".into()));
     }
-    if nr.due_on.trim().is_empty() {
-        return Err(AppError::BadRequest("reminder due date is required".into()));
-    }
+    // A real calendar date, like every other date in the app: "2026-02-31" or
+    // "next week" would sort and calendar as garbage.
+    let due_on = iso_date("due_on", Some(nr.due_on))?
+        .ok_or_else(|| AppError::BadRequest("reminder due date is required".into()))?;
     if let Some(existing) = sqlx::query_as::<_, Reminder>(
         "SELECT * FROM reminders WHERE pet_id = ? AND due_on = ? AND lower(title) = lower(?) LIMIT 1",
     )
     .bind(&id)
-    .bind(nr.due_on.trim())
+    .bind(&due_on)
     .bind(nr.title.trim())
     .fetch_optional(&pool)
     .await?
@@ -817,7 +839,7 @@ pub async fn create_reminder(
          VALUES (?,?,?,?,?, datetime('now')) RETURNING id",
     )
     .bind(&id)
-    .bind(nr.due_on.trim())
+    .bind(&due_on)
     .bind(nr.title.trim())
     .bind(&nr.kind)
     .bind(&nr.source)
@@ -842,6 +864,22 @@ pub async fn update_reminder(
     if exists.is_none() {
         return Err(AppError::NotFound(format!("no reminder {rid}")));
     }
+    // Same rules as create: a present due date must be a real date and a present
+    // title must not be blank (COALESCE below only keeps a value when ABSENT).
+    let due_on = match up.due_on {
+        Some(d) => Some(
+            iso_date("due_on", Some(d))?
+                .ok_or_else(|| AppError::BadRequest("reminder due date cannot be blank".into()))?,
+        ),
+        None => None,
+    };
+    let title = match up.title {
+        Some(t) if t.trim().is_empty() => {
+            return Err(AppError::BadRequest("reminder title cannot be empty".into()))
+        }
+        Some(t) => Some(t.trim().to_string()),
+        None => None,
+    };
     sqlx::query(
         "UPDATE reminders SET \
            done = COALESCE(?, done), \
@@ -850,8 +888,8 @@ pub async fn update_reminder(
          WHERE id = ?",
     )
     .bind(up.done)
-    .bind(&up.due_on)
-    .bind(&up.title)
+    .bind(&due_on)
+    .bind(&title)
     .bind(rid)
     .execute(&pool)
     .await?;
@@ -861,6 +899,19 @@ pub async fn update_reminder(
             .fetch_one(&pool)
             .await?,
     ))
+}
+
+/// 404 unless reminder `rid` exists AND belongs to `pet_id`. `/reminders/:id`
+/// is not pet-scoped yet (#17), so a caller that names a pet (the MCP tools,
+/// #22) checks ownership here before editing through the shared handler.
+pub(crate) async fn reminder_of_pet(pool: &SqlitePool, pet_id: &str, rid: i64) -> AppResult<()> {
+    sqlx::query_scalar::<_, i64>("SELECT id FROM reminders WHERE id = ? AND pet_id = ?")
+        .bind(rid)
+        .bind(pet_id)
+        .fetch_optional(pool)
+        .await?
+        .map(|_| ())
+        .ok_or_else(|| AppError::NotFound(format!("no reminder {rid} for pet '{pet_id}'")))
 }
 
 pub async fn delete_reminder(
@@ -924,7 +975,7 @@ pub(crate) fn validate_role(role: &str) -> AppResult<()> {
     }
 }
 
-async fn load_contact(pool: &SqlitePool, cid: &str) -> AppResult<Contact> {
+pub(crate) async fn load_contact(pool: &SqlitePool, cid: &str) -> AppResult<Contact> {
     sqlx::query_as::<_, Contact>("SELECT * FROM contacts WHERE id = ?")
         .bind(cid)
         .fetch_optional(pool)
@@ -1984,6 +2035,18 @@ async fn load_regimen(pool: &SqlitePool, rid: &str) -> AppResult<Regimen> {
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("no care entry '{rid}'")))
+}
+
+/// 404 unless care entry `rid` exists AND belongs to `pet_id`; the regimen
+/// counterpart of [`reminder_of_pet`] (#17, #22).
+pub(crate) async fn regimen_of_pet(pool: &SqlitePool, pet_id: &str, rid: &str) -> AppResult<()> {
+    sqlx::query_scalar::<_, String>("SELECT id FROM pet_regimens WHERE id = ? AND pet_id = ?")
+        .bind(rid)
+        .bind(pet_id)
+        .fetch_optional(pool)
+        .await?
+        .map(|_| ())
+        .ok_or_else(|| AppError::NotFound(format!("no care entry '{rid}' for pet '{pet_id}'")))
 }
 
 /// A pet's ongoing care, current entries first (same order as `PetDetail`).

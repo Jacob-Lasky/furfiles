@@ -6,6 +6,22 @@ All notable changes to FurFiles are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An MCP (Model Context Protocol) server at `/mcp`, so an AI assistant such
+  as Claude can read the household's pets, records, weights, reminders,
+  ongoing care, contacts, insurance and costs, and add or correct records,
+  weigh-ins, reminders and care entries. Off until `FURFILES_MCP_TOKEN` is
+  set; every request needs that token as a bearer token, and browser
+  requests are refused. No delete, archive or settings tools.
+
+### Fixed
+
+- A record's category must be one of the app's categories; an unknown one is
+  rejected instead of saved where no category view shows it.
+- Reminder due dates must be real dates (as every other date already was),
+  and an edit can no longer blank a reminder's title.
+
 ## [0.1.0] - 2026-11-02
 
 The first public release.
