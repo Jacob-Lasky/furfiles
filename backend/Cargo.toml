@@ -26,8 +26,12 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 # LLM document ingestion (#4). rustls (not native-tls) so the slim runtime image
-# needs no OpenSSL; the API key never leaves the backend in plaintext.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# needs no OpenSSL; the API key never leaves the backend in plaintext. Since
+# reqwest 0.13 `rustls` verifies against the OS trust store
+# (rustls-platform-verifier), so DO NOT drop `ca-certificates` from the runtime
+# image: every HTTPS call (Anthropic, facility websites) would fail. `query` is
+# the model-list `?limit=` builder, a separate feature since 0.13.
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls"] }
 chacha20poly1305 = "0.11"
 rand = "0.10"
 base64 = "0.23"
