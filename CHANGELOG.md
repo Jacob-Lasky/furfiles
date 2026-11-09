@@ -15,6 +15,12 @@ All notable changes to FurFiles are recorded here. The format follows
   the operating system's certificate store, so a custom image must keep
   `ca-certificates` installed.
 
+### Fixed
+
+- Reading a facility's website stops at the 2 MB page limit instead of
+  downloading the whole response first, so a site that sends an enormous or
+  endless page can no longer exhaust the server's memory.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

@@ -383,6 +383,28 @@ pub fn crawl_links(base: &Url, html: &str, keywords: &[&str], max: usize, skip: 
 /// How many same-origin sub-pages to follow for requirements beyond the given URL.
 const MAX_CRAWL_PAGES: usize = 4;
 
+/// Read at most `cap` bytes of a response body, chunk by chunk, and stop
+/// there. DO NOT replace this with `resp.bytes()` and a slice: that buffers the
+/// WHOLE body first, so a hostile or broken site answering with gigabytes
+/// exhausts the container's memory long before the 12 s timeout fires.
+pub async fn read_capped(mut resp: reqwest::Response, cap: usize) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    while out.len() < cap {
+        match resp
+            .chunk()
+            .await
+            .map_err(|e| format!("could not read that page: {e}"))?
+        {
+            Some(chunk) => {
+                let room = cap - out.len();
+                out.extend_from_slice(&chunk[..chunk.len().min(room)]);
+            }
+            None => break,
+        }
+    }
+    Ok(out)
+}
+
 /// GET a URL and return (final URL, HTML), size-capped, lossy UTF-8. Redirects
 /// are followed here, not by the client, so every hop is DNS-resolved and
 /// checked like the first URL: a public page answering `302 Location:
@@ -415,12 +437,8 @@ async fn get_html(client: &reqwest::Client, url: &Url) -> Result<(Url, String), 
         if !resp.status().is_success() {
             return Err(format!("the site returned {}", resp.status().as_u16()));
         }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| format!("could not read that page: {e}"))?;
-        let slice = &bytes[..bytes.len().min(MAX_PAGE_BYTES)];
-        return Ok((url, String::from_utf8_lossy(slice).into_owned()));
+        let bytes = read_capped(resp, MAX_PAGE_BYTES).await?;
+        return Ok((url, String::from_utf8_lossy(&bytes).into_owned()));
     }
     Err("too many redirects".to_string())
 }

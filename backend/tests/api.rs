@@ -3794,3 +3794,44 @@ async fn reminder_dates_are_real_and_titles_not_blank() {
     assert_eq!(up["done"], true);
     assert_eq!(up["due_on"], "2026-03-01");
 }
+
+/// A facility page that never ends must not be buffered whole (#23 review): the
+/// old `resp.bytes()` read waited for the end of an endless body (memory grew
+/// until the timeout or the OOM killer); `read_capped` stops at the cap.
+#[tokio::test]
+async fn facility_fetch_stops_reading_at_the_page_cap() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut sock, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = sock.read(&mut buf).await;
+        let head = "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ntransfer-encoding: chunked\r\n\r\n";
+        if sock.write_all(head.as_bytes()).await.is_err() {
+            return;
+        }
+        let chunk = vec![b'a'; 64 * 1024];
+        let mut frame = format!("{:x}\r\n", chunk.len()).into_bytes();
+        frame.extend_from_slice(&chunk);
+        frame.extend_from_slice(b"\r\n");
+        // Endless: only a client that stops reading ends this.
+        while sock.write_all(&frame).await.is_ok() {}
+    });
+    let resp = reqwest::get(format!("http://{addr}/")).await.unwrap();
+    let cap = furfiles::web::MAX_PAGE_BYTES;
+    let body = tokio::time::timeout(std::time::Duration::from_secs(10), furfiles::web::read_capped(resp, cap))
+        .await
+        .expect("read_capped must return at the cap, not wait for an endless body")
+        .unwrap();
+    assert_eq!(body.len(), cap);
+}
+
+#[tokio::test]
+async fn facility_fetch_reads_a_small_page_whole() {
+    let app = axum::Router::new().route("/", axum::routing::get(|| async { "<html>tiny</html>" }));
+    let base = common::serve(app).await;
+    let resp = reqwest::get(format!("{base}/")).await.unwrap();
+    let body = furfiles::web::read_capped(resp, 1024).await.unwrap();
+    assert_eq!(body, b"<html>tiny</html>");
+}
