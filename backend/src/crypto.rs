@@ -23,7 +23,13 @@ const NONCE_LEN: usize = 24;
 /// Losing/rotating this key makes an already-stored API key undecryptable — the
 /// user simply re-enters it. That is an acceptable failure for a single secret.
 pub fn resolve_key(db_dir: &Path) -> [u8; 32] {
-    if let Ok(secret) = std::env::var("FURFILES_SECRET") {
+    resolve_key_from(std::env::var("FURFILES_SECRET").ok().as_deref(), db_dir)
+}
+
+/// [`resolve_key`] with the passphrase passed in, so tests need not touch the
+/// process environment. A blank passphrase counts as unset.
+pub fn resolve_key_from(secret: Option<&str>, db_dir: &Path) -> [u8; 32] {
+    if let Some(secret) = secret {
         if !secret.trim().is_empty() {
             let mut h = Sha256::new();
             h.update(secret.as_bytes());
