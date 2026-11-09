@@ -213,38 +213,49 @@ header) are refused.
 
 ### Reaching it through a reverse proxy
 
-If FurFiles sits behind a reverse proxy (for HTTPS on your own domain), give
-the MCP endpoint its own hostname rather than reusing the app's:
+If FurFiles sits behind a reverse proxy with single sign-on (Authelia,
+Authentik, oauth2-proxy) in front of the app, let the MCP endpoint skip the
+sign-on while everything else keeps it:
 
-- **Route only the exact path `/mcp`.** Clients only ever use that one URL
-  (the server also answers under `/mcp/...`, but no client needs it), so the
-  rest of the app (the UI and `/api`) need not be reachable on that name.
-- **Do not put single sign-on in front of it** (Authelia, Authentik,
-  oauth2-proxy). An MCP client cannot follow a login redirect; the bearer
-  token is the authentication. Keep any SSO on the app's own hostname.
+- **Add one route for the exact path `/mcp`** on the app's hostname, ranked
+  above the app's own route, with no sign-on middleware. An MCP client cannot
+  follow a login redirect; the bearer token is the authentication. Clients
+  only ever use that one URL (the server also answers under `/mcp/...`, but no
+  client needs it), so match the exact path, not a prefix: everything else,
+  `/mcp/...` included, stays behind sign-on.
 - **Keep it off the internet**, with an IP allowlist for your home network and
   VPN, the same as the app itself (see [Security](#security)).
 - Pass the `Authorization` header through unchanged, and do not add an
   `Origin` header, which FurFiles refuses.
 
-Then point desktop clients at that name. For Claude Code, in a `.mcp.json`
-(or a file passed with `--mcp-config`), which expands `${...}` from the
-environment:
+A dedicated hostname that routes only `/mcp` works too, if you prefer not to
+mix the two on one name.
+
+Then point desktop clients at `https://<your-furfiles-host>/mcp`. For Claude
+Code, a `headersHelper` fetches the token when it connects, so it never sits in
+a config file:
 
 ```json
 {
   "mcpServers": {
     "furfiles": {
       "type": "http",
-      "url": "https://furfiles-mcp.example.lan/mcp",
-      "headers": { "Authorization": "Bearer ${FURFILES_MCP_TOKEN}" }
+      "url": "https://furfiles.example.lan/mcp",
+      "headersHelper": "/home/you/.local/bin/furfiles-mcp-headers"
     }
   }
 }
 ```
 
-Keep the token in a password or secrets manager and give it to Claude Code
-through the `FURFILES_MCP_TOKEN` environment variable. Never commit it.
+The helper prints the headers as JSON, reading the token from your password or
+secrets manager. For example, with Bitwarden Secrets Manager:
+
+```sh
+#!/bin/sh
+exec bws run -- 'printf "{\"Authorization\": \"Bearer %s\"}\n" "$FURFILES_MCP_TOKEN"'
+```
+
+Never commit the token.
 
 ## Backup and restore
 
