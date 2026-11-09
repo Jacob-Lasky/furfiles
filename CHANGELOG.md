@@ -6,6 +6,8 @@ All notable changes to FurFiles are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - An MCP (Model Context Protocol) server at `/mcp`, so an AI assistant such
@@ -21,6 +23,8 @@ All notable changes to FurFiles are recorded here. The format follows
   rejected instead of saved where no category view shows it.
 - Reminder due dates must be real dates (as every other date already was),
   and an edit can no longer blank a reminder's title.
+- Scanning a document no longer proposes a reminder with an impossible or
+  missing date (the bulk importer already skipped those).
 
 ## [0.1.0] - 2026-11-02
 
@@ -62,5 +66,6 @@ The first public release.
   squeezing the title into a narrow column (Calendar).
 - A new install no longer names its household owner after the author.
 
-[Unreleased]: https://github.com/Jacob-Lasky/furfiles/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Jacob-Lasky/furfiles/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Jacob-Lasky/furfiles/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Jacob-Lasky/furfiles/releases/tag/v0.1.0
