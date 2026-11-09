@@ -211,6 +211,41 @@ checks as the app, and records and reminders an assistant adds are marked
 with source `mcp`. Requests from a web page (anything with an `Origin`
 header) are refused.
 
+### Reaching it through a reverse proxy
+
+If FurFiles sits behind a reverse proxy (for HTTPS on your own domain), give
+the MCP endpoint its own hostname rather than reusing the app's:
+
+- **Route only the exact path `/mcp`.** Clients only ever use that one URL
+  (the server also answers under `/mcp/...`, but no client needs it), so the
+  rest of the app (the UI and `/api`) need not be reachable on that name.
+- **Do not put single sign-on in front of it** (Authelia, Authentik,
+  oauth2-proxy). An MCP client cannot follow a login redirect; the bearer
+  token is the authentication. Keep any SSO on the app's own hostname.
+- **Keep it off the internet**, with an IP allowlist for your home network and
+  VPN, the same as the app itself (see [Security](#security)).
+- Pass the `Authorization` header through unchanged, and do not add an
+  `Origin` header, which FurFiles refuses.
+
+Then point desktop clients at that name. For Claude Code, in a `.mcp.json`
+(or a file passed with `--mcp-config`), which expands `${...}` from the
+environment:
+
+```json
+{
+  "mcpServers": {
+    "furfiles": {
+      "type": "http",
+      "url": "https://furfiles-mcp.example.lan/mcp",
+      "headers": { "Authorization": "Bearer ${FURFILES_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+Keep the token in a password or secrets manager and give it to Claude Code
+through the `FURFILES_MCP_TOKEN` environment variable. Never commit it.
+
 ## Backup and restore
 
 Everything FurFiles knows is in the data directory (`./data` with Compose,
