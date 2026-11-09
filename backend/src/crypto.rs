@@ -8,7 +8,6 @@ use std::path::Path;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 const NONCE_LEN: usize = 24;
@@ -43,7 +42,8 @@ pub fn resolve_key(db_dir: &Path) -> [u8; 32] {
     }
 
     let mut k = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut k);
+    // rand 0.10: the thread-local CSPRNG that `thread_rng()` used to return.
+    rand::fill(&mut k[..]);
     if let Err(e) = write_key_file(&path, &k) {
         tracing::warn!("could not persist secret key to {}: {e}", path.display());
     }
@@ -76,7 +76,7 @@ fn write_key_file(path: &Path, key: &[u8; 32]) -> std::io::Result<()> {
 pub fn encrypt(key: &[u8; 32], plaintext: &str) -> String {
     let cipher = XChaCha20Poly1305::new(key.into());
     let mut nonce = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::fill(&mut nonce[..]);
     let ct = cipher
         .encrypt(&XNonce::from(nonce), plaintext.as_bytes())
         .expect("XChaCha20-Poly1305 encryption cannot fail for valid input");
