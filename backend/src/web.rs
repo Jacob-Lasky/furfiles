@@ -383,15 +383,61 @@ pub fn crawl_links(base: &Url, html: &str, keywords: &[&str], max: usize, skip: 
 /// How many same-origin sub-pages to follow for requirements beyond the given URL.
 const MAX_CRAWL_PAGES: usize = 4;
 
+/// Read at most `cap` bytes of a response body, chunk by chunk, and stop
+/// there. DO NOT replace this with `resp.bytes()` and a slice: that buffers the
+/// WHOLE body first, so a hostile or broken site answering with gigabytes
+/// exhausts the container's memory long before the 12 s timeout fires.
+pub async fn read_capped(mut resp: reqwest::Response, cap: usize) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    while out.len() < cap {
+        match resp
+            .chunk()
+            .await
+            .map_err(|e| format!("could not read that page: {e}"))?
+        {
+            Some(chunk) => {
+                let room = cap - out.len();
+                out.extend_from_slice(&chunk[..chunk.len().min(room)]);
+            }
+            None => break,
+        }
+    }
+    Ok(out)
+}
+
 /// GET a URL and return (final URL, HTML), size-capped, lossy UTF-8. Redirects
 /// are followed here, not by the client, so every hop is DNS-resolved and
 /// checked like the first URL: a public page answering `302 Location:
 /// http://router.lan/` must not reach the LAN. Browser-ish Accept header, since
 /// some site builders serve a stub to unknown Accept values.
+///
+/// DO NOT give this function any logic of its own, and above all DO NOT read
+/// the response body here: it must stay a pure delegation to
+/// [`get_html_guarded`] with the SSRF guard. The endless-body test
+/// (`facility_fetch_stops_reading_at_the_page_cap`) can only drive
+/// `get_html_guarded`, because a local test server cannot pass the guard, so
+/// anything added here runs in production untested.
 async fn get_html(client: &reqwest::Client, url: &Url) -> Result<(Url, String), String> {
+    get_html_guarded(client, url, resolved_ok).await
+}
+
+/// [`get_html`] with the per-hop address check passed in. Production ALWAYS
+/// goes through `get_html`, which passes the SSRF guard [`resolved_ok`]; this
+/// exists so a test can drive the real fetch-and-read path against a local
+/// server the guard would (correctly) refuse. DO NOT call it from app code.
+#[doc(hidden)]
+pub async fn get_html_guarded<F, Fut>(
+    client: &reqwest::Client,
+    url: &Url,
+    guard: F,
+) -> Result<(Url, String), String>
+where
+    F: Fn(Url) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
     let mut url = url.clone();
     for _ in 0..=MAX_REDIRECTS {
-        resolved_ok(url.clone()).await?;
+        guard(url.clone()).await?;
         let resp = client
             .get(url.clone())
             .header(
@@ -415,12 +461,8 @@ async fn get_html(client: &reqwest::Client, url: &Url) -> Result<(Url, String), 
         if !resp.status().is_success() {
             return Err(format!("the site returned {}", resp.status().as_u16()));
         }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| format!("could not read that page: {e}"))?;
-        let slice = &bytes[..bytes.len().min(MAX_PAGE_BYTES)];
-        return Ok((url, String::from_utf8_lossy(slice).into_owned()));
+        let bytes = read_capped(resp, MAX_PAGE_BYTES).await?;
+        return Ok((url, String::from_utf8_lossy(&bytes).into_owned()));
     }
     Err("too many redirects".to_string())
 }

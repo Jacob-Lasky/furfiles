@@ -3653,7 +3653,7 @@ async fn sex_migration_matches_the_rust_mapping() {
     let (before, m16): (Vec<_>, Vec<_>) = migrator.iter().partition(|m| m.version < 16);
     assert_eq!(m16[0].version, 16, "0016 is the sex migration");
     for m in before {
-        sqlx::raw_sql(&m.sql).execute(&pool).await.unwrap();
+        sqlx::raw_sql(m.sql.clone()).execute(&pool).await.unwrap();
     }
     // Words `sex_from_text` learned after 0016 shipped. The migration is frozen
     // (sqlx checksums it), so a new Rust word is listed here, never added there.
@@ -3694,7 +3694,7 @@ async fn sex_migration_matches_the_rust_mapping() {
     }
     sqlx::query("INSERT INTO pets (id, name, species, created_at, updated_at) VALUES ('null', 'Null', 'Cat', '', '')")
         .execute(&pool).await.unwrap();
-    sqlx::raw_sql(&m16[0].sql).execute(&pool).await.unwrap();
+    sqlx::raw_sql(m16[0].sql.clone()).execute(&pool).await.unwrap();
 
     for (i, t) in samples.iter().enumerate() {
         let (sex, original): (Option<String>, String) = sqlx::query_as(
@@ -3793,4 +3793,52 @@ async fn reminder_dates_are_real_and_titles_not_blank() {
     assert_eq!(up["title"], "Rabies booster");
     assert_eq!(up["done"], true);
     assert_eq!(up["due_on"], "2026-03-01");
+}
+
+/// A facility page that never ends must not be buffered whole (#23 review): the
+/// old `resp.bytes()` read waited for the end of an endless body (memory grew
+/// until the timeout or the OOM killer); `read_capped` stops at the cap.
+#[tokio::test]
+async fn facility_fetch_stops_reading_at_the_page_cap() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut sock, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = sock.read(&mut buf).await;
+        let head = "HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ntransfer-encoding: chunked\r\n\r\n";
+        if sock.write_all(head.as_bytes()).await.is_err() {
+            return;
+        }
+        let chunk = vec![b'a'; 64 * 1024];
+        let mut frame = format!("{:x}\r\n", chunk.len()).into_bytes();
+        frame.extend_from_slice(&chunk);
+        frame.extend_from_slice(b"\r\n");
+        // Endless: only a client that stops reading ends this.
+        while sock.write_all(&frame).await.is_ok() {}
+    });
+    // Through the real fetch path (get_html's loop, status handling and body
+    // read), with an allow-all address check in place of the SSRF guard that
+    // would rightly refuse 127.0.0.1.
+    let client = reqwest::Client::new();
+    let url = reqwest::Url::parse(&format!("http://{addr}/")).unwrap();
+    let allow = |_u: reqwest::Url| async { Ok::<(), String>(()) };
+    let (_, html) = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        furfiles::web::get_html_guarded(&client, &url, allow),
+    )
+    .await
+    .expect("the page read must stop at the cap, not wait for an endless body")
+    .unwrap();
+    assert_eq!(html.len(), furfiles::web::MAX_PAGE_BYTES);
+}
+
+#[tokio::test]
+async fn facility_fetch_reads_a_small_page_whole() {
+    let app = axum::Router::new().route("/", axum::routing::get(|| async { "<html>tiny</html>" }));
+    let base = common::serve(app).await;
+    let resp = reqwest::get(format!("{base}/")).await.unwrap();
+    let body = furfiles::web::read_capped(resp, 1024).await.unwrap();
+    assert_eq!(body, b"<html>tiny</html>");
 }

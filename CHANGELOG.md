@@ -6,6 +6,21 @@ All notable changes to FurFiles are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Backend dependencies moved to their current major versions: axum 0.8,
+  sqlx 0.9, tower-http 0.7, reqwest 0.13, rand 0.10, sha2 0.11,
+  chacha20poly1305 0.11 and base64 0.23. Existing databases, stored AI keys
+  and the generated secret key file keep working unchanged. HTTPS now trusts
+  the operating system's certificate store, so a custom image must keep
+  `ca-certificates` installed.
+
+### Fixed
+
+- Reading a facility's website stops at the 2 MB page limit instead of
+  downloading the whole response first, so a site that sends an enormous or
+  endless page can no longer exhaust the server's memory.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

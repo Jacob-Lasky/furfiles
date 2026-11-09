@@ -8,7 +8,6 @@ use std::path::Path;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 const NONCE_LEN: usize = 24;
@@ -24,7 +23,13 @@ const NONCE_LEN: usize = 24;
 /// Losing/rotating this key makes an already-stored API key undecryptable — the
 /// user simply re-enters it. That is an acceptable failure for a single secret.
 pub fn resolve_key(db_dir: &Path) -> [u8; 32] {
-    if let Ok(secret) = std::env::var("FURFILES_SECRET") {
+    resolve_key_from(std::env::var("FURFILES_SECRET").ok().as_deref(), db_dir)
+}
+
+/// [`resolve_key`] with the passphrase passed in, so tests need not touch the
+/// process environment. A blank passphrase counts as unset.
+pub fn resolve_key_from(secret: Option<&str>, db_dir: &Path) -> [u8; 32] {
+    if let Some(secret) = secret {
         if !secret.trim().is_empty() {
             let mut h = Sha256::new();
             h.update(secret.as_bytes());
@@ -43,7 +48,8 @@ pub fn resolve_key(db_dir: &Path) -> [u8; 32] {
     }
 
     let mut k = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut k);
+    // rand 0.10: the thread-local CSPRNG that `thread_rng()` used to return.
+    rand::fill(&mut k[..]);
     if let Err(e) = write_key_file(&path, &k) {
         tracing::warn!("could not persist secret key to {}: {e}", path.display());
     }
@@ -76,9 +82,9 @@ fn write_key_file(path: &Path, key: &[u8; 32]) -> std::io::Result<()> {
 pub fn encrypt(key: &[u8; 32], plaintext: &str) -> String {
     let cipher = XChaCha20Poly1305::new(key.into());
     let mut nonce = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::fill(&mut nonce[..]);
     let ct = cipher
-        .encrypt(XNonce::from_slice(&nonce), plaintext.as_bytes())
+        .encrypt(&XNonce::from(nonce), plaintext.as_bytes())
         .expect("XChaCha20-Poly1305 encryption cannot fail for valid input");
     let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
     out.extend_from_slice(&nonce);
@@ -94,9 +100,10 @@ pub fn decrypt(key: &[u8; 32], blob: &str) -> anyhow::Result<String> {
         anyhow::bail!("ciphertext too short");
     }
     let (nonce, ct) = raw.split_at(NONCE_LEN);
+    let nonce = XNonce::try_from(nonce).map_err(|_| anyhow::anyhow!("malformed nonce"))?;
     let cipher = XChaCha20Poly1305::new(key.into());
     let pt = cipher
-        .decrypt(XNonce::from_slice(nonce), ct)
+        .decrypt(&nonce, ct)
         .map_err(|_| anyhow::anyhow!("decryption failed (wrong key or corrupt data)"))?;
     Ok(String::from_utf8(pt)?)
 }

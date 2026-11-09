@@ -25,6 +25,9 @@ RUN cargo build --release --locked --bin furfiles
 
 # --- runtime ---
 FROM debian:trixie-slim
+# ca-certificates is load-bearing: reqwest's rustls verifies HTTPS against the
+# OS trust store (backend/Cargo.toml), so without it every Anthropic call and
+# facility-website fetch fails. DO NOT remove it to slim the image.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
