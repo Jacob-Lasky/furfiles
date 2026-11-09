@@ -411,9 +411,26 @@ pub async fn read_capped(mut resp: reqwest::Response, cap: usize) -> Result<Vec<
 /// http://router.lan/` must not reach the LAN. Browser-ish Accept header, since
 /// some site builders serve a stub to unknown Accept values.
 async fn get_html(client: &reqwest::Client, url: &Url) -> Result<(Url, String), String> {
+    get_html_guarded(client, url, resolved_ok).await
+}
+
+/// [`get_html`] with the per-hop address check passed in. Production ALWAYS
+/// goes through `get_html`, which passes the SSRF guard [`resolved_ok`]; this
+/// exists so a test can drive the real fetch-and-read path against a local
+/// server the guard would (correctly) refuse. DO NOT call it from app code.
+#[doc(hidden)]
+pub async fn get_html_guarded<F, Fut>(
+    client: &reqwest::Client,
+    url: &Url,
+    guard: F,
+) -> Result<(Url, String), String>
+where
+    F: Fn(Url) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
     let mut url = url.clone();
     for _ in 0..=MAX_REDIRECTS {
-        resolved_ok(url.clone()).await?;
+        guard(url.clone()).await?;
         let resp = client
             .get(url.clone())
             .header(

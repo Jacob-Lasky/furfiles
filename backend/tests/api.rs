@@ -3818,13 +3818,20 @@ async fn facility_fetch_stops_reading_at_the_page_cap() {
         // Endless: only a client that stops reading ends this.
         while sock.write_all(&frame).await.is_ok() {}
     });
-    let resp = reqwest::get(format!("http://{addr}/")).await.unwrap();
-    let cap = furfiles::web::MAX_PAGE_BYTES;
-    let body = tokio::time::timeout(std::time::Duration::from_secs(10), furfiles::web::read_capped(resp, cap))
-        .await
-        .expect("read_capped must return at the cap, not wait for an endless body")
-        .unwrap();
-    assert_eq!(body.len(), cap);
+    // Through the real fetch path (get_html's loop, status handling and body
+    // read), with an allow-all address check in place of the SSRF guard that
+    // would rightly refuse 127.0.0.1.
+    let client = reqwest::Client::new();
+    let url = reqwest::Url::parse(&format!("http://{addr}/")).unwrap();
+    let allow = |_u: reqwest::Url| async { Ok::<(), String>(()) };
+    let (_, html) = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        furfiles::web::get_html_guarded(&client, &url, allow),
+    )
+    .await
+    .expect("the page read must stop at the cap, not wait for an endless body")
+    .unwrap();
+    assert_eq!(html.len(), furfiles::web::MAX_PAGE_BYTES);
 }
 
 #[tokio::test]
