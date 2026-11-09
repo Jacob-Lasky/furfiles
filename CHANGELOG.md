@@ -6,6 +6,8 @@ All notable changes to FurFiles are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-09
+
 ### Changed
 
 - Backend dependencies moved to their current major versions: axum 0.8,
@@ -87,6 +89,7 @@ The first public release.
   squeezing the title into a narrow column (Calendar).
 - A new install no longer names its household owner after the author.
 
-[Unreleased]: https://github.com/Jacob-Lasky/furfiles/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Jacob-Lasky/furfiles/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Jacob-Lasky/furfiles/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Jacob-Lasky/furfiles/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Jacob-Lasky/furfiles/releases/tag/v0.1.0
