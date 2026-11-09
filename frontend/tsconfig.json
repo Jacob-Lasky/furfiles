@@ -2,11 +2,20 @@
   "compilerOptions": {
     // Vite/esbuild transpiles per-file and never type-checks; vue-tsc does the
     // checking. So these options target correctness, not emit.
+    // TypeScript is held on 6.x (package.json `^6`) ON PURPOSE: vue-tsc 3.3
+    // runs TypeScript's JS compiler (`typescript/lib/tsc`), which the native
+    // TypeScript 7 does not ship, so with 7 the typecheck (and `pnpm run
+    // build`) dies with ERR_PACKAGE_PATH_NOT_EXPORTED (measured 2026-11-09, #27).
+    // Move to 7 only once vue-tsc supports it, and prove it with a planted error.
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    // vite/client declares what Vite resolves at build time (`*.css` side-effect
+    // imports, assets, import.meta.env). TypeScript 6 checks side-effect imports
+    // (noUncheckedSideEffectImports), so without it `import './styles.css'`
+    // fails the typecheck.
+    "types": ["node", "vite/client"],
     "noEmit": true,
 
     // Full strict, with one deliberate exception: caught errors stay `any`
