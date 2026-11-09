@@ -145,11 +145,15 @@ async fn mcp_disabled() -> Response {
         .into_response()
 }
 
-/// The `/mcp` router. With no token configured, every method answers a JSON 404
-/// (not the SPA shell the outer fallback would serve with a 200).
+/// The `/mcp` router. With no token configured, every method on `/mcp` and any
+/// path under it answers a JSON 404 (not the SPA shell the outer fallback
+/// would serve with a 200).
 pub fn router(state: AppState, token: Option<McpToken>) -> Router {
     let Some(token) = token else {
-        return Router::new().route("/mcp", axum::routing::any(mcp_disabled));
+        return Router::new()
+            .route("/mcp", axum::routing::any(mcp_disabled))
+            .route("/mcp/", axum::routing::any(mcp_disabled))
+            .route("/mcp/*rest", axum::routing::any(mcp_disabled));
     };
     // Host checking is OFF: the bearer token is the gate, and the server is
     // reached under several LAN names. Origin checking is ON with an empty

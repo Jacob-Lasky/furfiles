@@ -157,6 +157,71 @@ async fn disabled_without_a_token_is_a_json_404_not_the_spa() {
     assert_eq!(MIN_TOKEN_LEN, 32);
 }
 
+/// Send an arbitrary request to the full router; (status, headers, body text).
+async fn raw(app: &Router, req: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let headers = res.headers().clone();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        headers,
+        String::from_utf8_lossy(&bytes).into_owned(),
+    )
+}
+
+#[tokio::test]
+async fn disabled_paths_under_mcp_are_json_404s_too() {
+    let app = router(seeded().await, None);
+    for (method, uri) in [
+        ("GET", "/mcp/"),
+        ("GET", "/mcp/x"),
+        ("POST", "/mcp/a/b"),
+        ("DELETE", "/mcp"),
+    ] {
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("host", "t")
+            .body(Body::empty())
+            .unwrap();
+        let (status, _, body) = raw(&app, req).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}");
+        assert!(
+            body.contains("FURFILES_MCP_TOKEN"),
+            "{method} {uri}: {body}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_cors_preflight_is_not_answered_for_mcp() {
+    let (app, _) = app().await;
+    let preflight = || {
+        Request::builder()
+            .method("OPTIONS")
+            .header("host", "t")
+            .header("origin", "http://evil.example")
+            .header("access-control-request-method", "POST")
+            .header(
+                "access-control-request-headers",
+                "authorization,content-type",
+            )
+    };
+    let (status, headers, _) =
+        raw(&app, preflight().uri("/mcp").body(Body::empty()).unwrap()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(headers.get("access-control-allow-origin").is_none());
+    // The web API keeps its CORS behaviour.
+    let (status, headers, _) = raw(
+        &app,
+        preflight().uri("/api/pets").body(Body::empty()).unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(headers.get("access-control-allow-origin").is_some());
+}
+
 #[tokio::test]
 async fn browser_origin_is_refused_even_with_the_token() {
     let (app, _) = app().await;

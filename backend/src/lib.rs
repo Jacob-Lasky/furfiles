@@ -361,13 +361,17 @@ pub fn build_router(state: AppState, static_dir: PathBuf) -> Router {
     let index = static_dir.join("index.html");
     let spa = ServeDir::new(&static_dir).fallback(ServeFile::new(index));
     let mcp = mcp::router(state.clone(), state.mcp_token.clone());
-    Router::new()
+    // CORS covers the web app only. `/mcp` refuses browsers outright (#22), so
+    // it must not answer a preflight with "allowed" either.
+    let web = Router::new()
         .nest("/api", api_router(state))
-        .merge(mcp)
         .fallback_service(spa)
+        .layer(CorsLayer::permissive());
+    Router::new()
+        .merge(mcp)
+        .merge(web)
         .layer(middleware::from_fn(cache_control))
         .layer(middleware::from_fn(log_errors))
-        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
 }
 

@@ -369,10 +369,22 @@ pub(crate) fn tool_use_input<'a>(resp: &'a Value, tool: &str) -> Result<&'a Valu
 /// Parse a successful Anthropic response into [`ExtractedFields`], reading the
 /// `record_fields` tool_use block. Returns a human-readable error string
 /// on any shape we don't recognize.
+///
+/// Proposed reminders without a real due date or a title are dropped here, the
+/// same rule bulk import applies when it builds a plan. The scan sheet saves
+/// the record first and the reminders last, and cannot edit a proposed date, so
+/// a "2026-02-30" passed through would fail the reminder AFTER the record was
+/// saved and report the whole save as failed.
 pub fn parse_response(resp: &Value) -> Result<ExtractedFields, String> {
     let input = tool_use_input(resp, RECORD_TOOL)?;
-    serde_json::from_value(input.clone())
-        .map_err(|e| format!("could not parse extracted fields: {e}"))
+    let mut fields: ExtractedFields = serde_json::from_value(input.clone())
+        .map_err(|e| format!("could not parse extracted fields: {e}"))?;
+    fields.reminders.retain_mut(|r| {
+        r.title = r.title.trim().to_string();
+        r.due_on = crate::handlers::iso_date("due_on", r.due_on.take()).ok().flatten();
+        r.due_on.is_some() && !r.title.is_empty()
+    });
+    Ok(fields)
 }
 
 /// A free-form request (no tool) used by the preview/debug endpoint to

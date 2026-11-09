@@ -704,6 +704,29 @@ fn parse_response_reads_tool_use_and_errors_otherwise() {
 }
 
 #[test]
+fn parse_response_drops_reminders_the_scan_sheet_could_not_save() {
+    let resp = json!({
+        "content": [{
+            "type": "tool_use", "name": "record_fields",
+            "input": {
+                "title": "Exam",
+                "reminders": [
+                    {"due_on": " 2026-09-05 ", "title": " Fecal exam "},
+                    {"due_on": "2026-02-30", "title": "Impossible date"},
+                    {"due_on": "next spring", "title": "Not a date"},
+                    {"title": "No date"},
+                    {"due_on": "2026-10-01", "title": "  "}
+                ]
+            }
+        }]
+    });
+    let f = furfiles::ingestion::parse_response(&resp).unwrap();
+    assert_eq!(f.reminders.len(), 1);
+    assert_eq!(f.reminders[0].title, "Fecal exam");
+    assert_eq!(f.reminders[0].due_on.as_deref(), Some("2026-09-05"));
+}
+
+#[test]
 fn media_supported_matches_the_allowed_list() {
     assert!(furfiles::ingestion::media_supported("application/pdf"));
     assert!(furfiles::ingestion::media_supported("image/jpeg"));
