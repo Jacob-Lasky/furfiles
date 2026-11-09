@@ -54,6 +54,10 @@ own-your-data tracker in between.
   pets' photos.
 - **API-first.** Everything the UI does goes through the same REST API under
   `/api`, so anything can be scripted.
+- **MCP server** (optional, off by default). Ask an AI assistant such as Claude
+  "when is Biscuit's next booster?" or "log Miso at 4.2 kg today": FurFiles
+  serves its records as [Model Context Protocol](https://modelcontextprotocol.io)
+  tools at `/mcp`, behind a token. See [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp).
 - **Phone and desktop**, light and dark themes, installable as a web app.
 
 | | | |
@@ -126,6 +130,9 @@ network or a VPN, or put it behind a reverse proxy that adds authentication
 (Authelia, Authentik, oauth2-proxy, basic auth). Do not expose it to the
 internet as is.
 
+The MCP endpoint (`/mcp`) is the one exception: it does not exist until you
+set `FURFILES_MCP_TOKEN`, and then every request must carry that token.
+
 ## Configuration
 
 All settings are environment variables; none are required.
@@ -139,6 +146,7 @@ All settings are environment variables; none are required.
 | `FURFILES_SECRET` | unset | Passphrase that encrypts the stored AI API key. If unset, a random key is generated at `<db dir>/furfiles-secret.key`. |
 | `FURFILES_OWNER_NAME` | `Owner` | Household owner's display name, set the first time the database is created. |
 | `FURFILES_SEED_DEMO` | off | `1` fills an empty database with the fictional demo household. |
+| `FURFILES_MCP_TOKEN` | unset | Turns on the MCP endpoint at `/mcp` and is the bearer token it requires. At least 32 characters (`openssl rand -hex 32`). Unset or shorter: `/mcp` is off. |
 | `FURFILES_DIAG_DIR` | a temp dir | Where in-app error reports are kept. Point it at a tmpfs so they are wiped on restart. |
 | `FURFILES_STATIC` | `/app/static` | Built frontend to serve. |
 | `RUST_LOG` | `furfiles=info,tower_http=warn` | Log filter. |
@@ -146,6 +154,62 @@ All settings are environment variables; none are required.
 The AI document reader is configured in the app under **Settings**: paste an
 Anthropic API key and pick a model. It is off until you do, and documents are
 only sent to Anthropic when you ask for a scan or an import.
+
+## Use it from an AI assistant (MCP)
+
+FurFiles can serve the household's records to an AI assistant over the
+[Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP,
+at `/mcp` on the same port as the app). It is off until you set a token:
+
+```sh
+openssl rand -hex 32      # put this in FURFILES_MCP_TOKEN and restart
+```
+
+Then point your MCP client at `http://<your-server>:8080/mcp` with the header
+`Authorization: Bearer <token>`. For Claude Code:
+
+```sh
+claude mcp add --transport http furfiles http://<your-server>:8080/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+or in a `.mcp.json`, reading the token from your environment:
+
+```json
+{
+  "mcpServers": {
+    "furfiles": {
+      "type": "http",
+      "url": "http://<your-server>:8080/mcp",
+      "headers": { "Authorization": "Bearer ${FURFILES_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+The tools:
+
+| Tool | What it does |
+| --- | --- |
+| `list_pets` | The household's pets and each one's next reminder (archived pets on request). |
+| `get_pet` | One pet's full profile: facts, records, weights, reminders, ongoing care, care team, allergies. |
+| `list_records`, `get_record` | Vet visits, vaccinations given, prescriptions, boarding and grooming; one record in full. |
+| `create_record`, `update_record` | Add a record, or correct one (only the fields you send change). |
+| `list_weights`, `log_weight` | Weight history; log a weigh-in in lb or kg. |
+| `list_reminders` | What is due (boosters, appointments, refills), household-wide or for one pet. |
+| `create_reminder`, `update_reminder` | Add something due; mark it done, reschedule or retitle it. |
+| `list_regimens` | Medications, preventatives, food and supplements, current ones first. |
+| `create_regimen`, `update_regimen` | Start one; change the dose, or set an end date when the pet stops. |
+| `list_contacts` | Vets, emergency clinics, groomers and boarding, or one pet's care team. |
+| `list_insurance` | A pet's insurance and wellness plans. |
+| `get_costs_summary` | Spending by category and pet, and what insurance paid back. |
+
+Reads are marked read-only, so a client can run them without asking. There
+are no delete, archive or pet-profile tools, and no settings, import or
+document-scanning tools: those stay in the app. Writes go through the same
+checks as the app, and records and reminders an assistant adds are marked
+with source `mcp`. Requests from a web page (anything with an `Origin`
+header) are refused.
 
 ## Backup and restore
 

@@ -10,7 +10,7 @@ use sqlx::FromRow;
 /// absent → `None` (keep the stored value), `null` → `Some(None)` (clear),
 /// value → `Some(Some(v))` (set). Plain `Option<T>` can't tell absent from null,
 /// which is why a full-editor PATCH (the record edit modal, #15) needs this.
-fn double_option<'de, T, D>(de: D) -> Result<Option<Option<T>>, D::Error>
+pub(crate) fn double_option<'de, T, D>(de: D) -> Result<Option<Option<T>>, D::Error>
 where
     T: Deserialize<'de>,
     D: Deserializer<'de>,

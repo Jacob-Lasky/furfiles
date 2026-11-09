@@ -27,3 +27,6 @@ services:
       # Passphrase that encrypts the stored AI API key. Without it a key file
       # is generated in ./data (keep it with your backups either way).
       FURFILES_SECRET: ${FURFILES_SECRET:-}
+      # Turns on the MCP server at /mcp and is the bearer token it requires
+      # (at least 32 characters, e.g. `openssl rand -hex 32`). Empty = off.
+      FURFILES_MCP_TOKEN: ${FURFILES_MCP_TOKEN:-}
